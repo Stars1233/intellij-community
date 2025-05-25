@@ -16,6 +16,7 @@ import com.intellij.vcs.git.shared.rpc.GitRepositoryEvent
 import git4idea.GitDisposable
 import git4idea.branch.GitRefType
 import git4idea.repo.GitRepository
+import git4idea.repo.GitRepositoryIdCache
 import git4idea.repo.GitRepositoryManager
 import git4idea.ui.branch.GitBranchManager
 import kotlinx.coroutines.channels.SendChannel
@@ -31,6 +32,13 @@ class GitRepositoryApiImpl : GitRepositoryApi {
       LOG.debug("Known repositories: $repositories")
     }
     return repositories.map { GitRepositoryToDtoConverter.convertToDto(it) }
+  }
+
+  override suspend fun getRepository(repositoryId: RepositoryId): GitRepositoryDto? {
+    val project = repositoryId.projectId.findProject()
+    return GitRepositoryIdCache.getInstance(project).get(repositoryId)?.let {
+      GitRepositoryToDtoConverter.convertToDto(it)
+    }
   }
 
   override suspend fun getRepositoriesEvents(projectId: ProjectId): Flow<GitRepositoryEvent> {

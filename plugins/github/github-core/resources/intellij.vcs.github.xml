@@ -83,7 +83,7 @@
 
     <registryKey defaultValue="true"
                  description="Whether to check that the PR list is up-to-date using ETags"
-                 key="github.pr.list.automatic.refresh.seconds"/>
+                 key="github.pr.list.automatic.refresh.enabled"/>
     <registryKey defaultValue="30"
                  description="Seconds between checking the ETag for the PR list"
                  key="github.pr.list.automatic.refresh.seconds"/>
@@ -109,11 +109,6 @@
   </extensions>
 
   <actions>
-    <action id="Github.Share" class="org.jetbrains.plugins.github.GithubShareAction" icon="AllIcons.Vcs.Vendors.Github">
-      <add-to-group group-id="Vcs.Import"/>
-      <add-to-group group-id="Vcs.ToolbarWidget.ShareProject" relative-to-action="Start.Use.Vcs" anchor="before"/>
-      <override-text place="Vcs.Toolbar.Widget"/>
-    </action>
     <action id="Github.Sync.Fork"
             class="org.jetbrains.plugins.github.GithubSyncForkAction"
             icon="AllIcons.Vcs.Vendors.Github">
@@ -151,7 +146,6 @@
       <add-to-group group-id="ConsoleEditorPopupMenu"/>
     </action>
     <group id="GitHub.MainMenu" popup="true">
-      <reference ref="Github.Share"/>
       <reference ref="Github.Create.Pull.Request"/>
       <reference ref="Github.View.Pull.Request"/>
       <reference ref="Github.Sync.Fork"/>

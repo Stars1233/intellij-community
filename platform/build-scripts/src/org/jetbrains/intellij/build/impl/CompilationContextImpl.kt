@@ -57,6 +57,7 @@ import org.jetbrains.jps.model.java.JpsJavaSdkType
 import org.jetbrains.jps.model.library.JpsOrderRootType
 import org.jetbrains.jps.model.library.sdk.JpsSdkReference
 import org.jetbrains.jps.model.module.JpsModule
+import org.jetbrains.jps.model.serialization.JpsMavenSettings.getMavenRepositoryPath
 import org.jetbrains.jps.model.serialization.JpsModelSerializationDataService
 import org.jetbrains.jps.model.serialization.JpsPathMapper
 import org.jetbrains.jps.model.serialization.JpsProjectLoader.loadProject
@@ -416,7 +417,13 @@ private suspend fun loadProject(projectHome: Path, kotlinBinaries: KotlinBinarie
   }
 
   spanBuilder("load project").use(Dispatchers.IO) { span ->
-    pathVariablesConfiguration.addPathVariable("MAVEN_REPOSITORY", Path.of(System.getProperty("user.home"), ".m2/repository").invariantSeparatorsPathString)
+    val mavenRepositoryPath = getMavenRepositoryPath()
+    span.addEvent(
+      "Resolved local maven repository path",
+      Attributes.of(AttributeKey.stringKey("m2 repository path"), mavenRepositoryPath),
+    )
+
+    pathVariablesConfiguration.addPathVariable("MAVEN_REPOSITORY", mavenRepositoryPath)
     val pathVariables = JpsModelSerializationDataService.computeAllPathVariables(model.global)
     loadProject(model.project, pathVariables, JpsPathMapper.IDENTITY, projectHome, null, { it: Runnable -> launch(CoroutineName("loading project")) { it.run() } }, false)
     span.setAllAttributes(

@@ -5,6 +5,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.IdeBundle
 import com.intellij.ide.ui.UISettings.Companion.setupAntialiasing
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.impl.InternalUICustomization
 import com.intellij.openapi.progress.ProgressModel
 import com.intellij.openapi.progress.TaskInfo
 import com.intellij.openapi.ui.popup.IconButton
@@ -182,6 +183,7 @@ open class ProgressComponent(val isCompact: Boolean, val info: TaskInfo, progres
       progress.setValue((fraction * 99 + 1).toInt())
     }
 
+    val oldTextValue = this.textValue
     val text = indicatorModel.getText()
     val text2 = indicatorModel.getDetails()
     this.textValue = text ?: ""
@@ -190,6 +192,8 @@ open class ProgressComponent(val isCompact: Boolean, val info: TaskInfo, progres
     if (isCompact && StringUtil.isEmpty(this.textValue)) {
       this.textValue = indicatorModel.title
     }
+
+    IntegrationTestsProgressesTracker.progressTitleChanged(indicatorModel, oldTextValue?: "", this.textValue?: "")
 
     if (this.isStopping) {
       if (isCompact) {
@@ -261,6 +265,10 @@ open class ProgressComponent(val isCompact: Boolean, val info: TaskInfo, progres
           }
         }
       })
+    }
+
+    override fun paint(g: Graphics) {
+      super.paint(InternalUICustomization.getInstance()?.preserveGraphics(g))
     }
 
     override fun paintComponent(g: Graphics) {

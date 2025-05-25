@@ -1,6 +1,8 @@
 package com.intellij.settingsSync.core.config
 
 
+import com.intellij.BundleBase
+import com.intellij.CommonBundle
 import com.intellij.icons.AllIcons
 import com.intellij.ide.DataManager
 import com.intellij.openapi.actionSystem.*
@@ -41,6 +43,7 @@ import com.intellij.ui.components.DropDownLink
 import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.dsl.builder.components.DslLabel
 import com.intellij.ui.dsl.builder.components.DslLabelType
+import com.intellij.ui.dsl.gridLayout.UnscaledGaps
 import com.intellij.ui.layout.ComponentPredicate
 import com.intellij.ui.layout.and
 import com.intellij.ui.layout.not
@@ -123,24 +126,30 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
       }
 
       updateUserAccountsList()
+      val infoRow = row {
+        text(message("settings.sync.info.message"))
+        SettingsSyncCommunicatorProvider.PROVIDER_EP.extensionList.firstOrNull { it.isAvailable() && it.learnMoreLinkPair != null }?.also {
+          val linkPair = it.learnMoreLinkPair!!
+          browserLink(linkPair.first, linkPair.second)
+        }
+      }
+
       rowsRange {
         row {
-          label(message("settings.sync.info.message"))
-          SettingsSyncCommunicatorProvider.PROVIDER_EP.extensionList.firstOrNull { it.isAvailable() && it.learnMoreLinkPair != null }?.also {
-            val linkPair = it.learnMoreLinkPair!!
-            browserLink(linkPair.first, linkPair.second)
-          }
+          text(message("settings.sync.select.provider.message"))
         }
-
 
         row {
           val availableProviders = RemoteCommunicatorHolder.getAvailableProviders()
-          availableProviders.forEach { provider ->
+          availableProviders.forEachIndexed { idx, provider ->
+            if (idx > 0) {
+              label(message("settings.sync.select.provider.or")).gap(RightGap.SMALL)
+            }
             button(provider.authService.providerName) {
               login(provider, syncConfigPanel)
             }.applyToComponent {
               icon = provider.authService.icon
-            }
+            }.gap(RightGap.SMALL)
           }
         }.visibleIf(hasMultipleProviders)
 
@@ -161,6 +170,7 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
         enableCheckbox.addActionListener {
           enableButtonAction()
         }
+        infoRow.visibleIf(enableCheckbox.selected.not())
         userDropDownLink = DropDownLink<UserProviderHolder?>(userProviderHolder) { link: DropDownLink<UserProviderHolder?>? -> showAccounts(link) }
         cellDropDownLink = cell(userDropDownLink).onChangedContext { component, context ->
           val event = context.event
@@ -180,8 +190,8 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
       }.visibleIf(wasUsedBefore)
 
       // settings to sync
-      group(message("enable.dialog.select.what.to.sync")) {
-        rowsRange {
+      rowsRange {
+        group(message("enable.dialog.select.what.to.sync")) {
           row {
             icon(AllIcons.General.BalloonWarning).applyToComponent {
               isOpaque = true
@@ -237,12 +247,13 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
                   userId = userDropDownLink.selectedItem?.userId
                   providerCode = userDropDownLink.selectedItem?.providerCode
                 }
+                cellDropDownLink.comment?.text = ""
                 if (enableCheckbox.isSelected) {
                   syncConfigPanel.apply()
                 }
                 if (SettingsSyncSettings.getInstance().syncEnabled != enableCheckbox.isSelected) {
                   if (enableCheckbox.isSelected) {
-                    SettingsSyncSettings.getInstance().syncEnabled = enableCheckbox.isSelected
+                    SettingsSyncSettings.getInstance().syncEnabled = true
                     if (enableSyncOption.get() == InitSyncType.GET_FROM_SERVER) {
                       syncEnabler.getSettingsFromServer()
                     }
@@ -251,24 +262,7 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
                     }
                   }
                   else {
-                    when (disableSyncOption.get()) {
-                      DisableSyncType.DISABLE_AND_REMOVE_DATA -> {
-                        disableAndRemoveData()
-                        SettingsSyncEventsStatistics.DISABLED_MANUALLY.log(
-                          SettingsSyncEventsStatistics.ManualDisableMethod.DISABLED_AND_REMOVED_DATA_FROM_SERVER)
-                      }
-                      DisableSyncType.DISABLE -> {
-                        SettingsSyncSettings.getInstance().syncEnabled = false
-                        syncStatusChanged()
-                        SettingsSyncEventsStatistics.DISABLED_MANUALLY.log(SettingsSyncEventsStatistics.ManualDisableMethod.DISABLED_ONLY)
-                      }
-                      else -> {
-                        SettingsSyncSettings.getInstance().syncEnabled = false
-                        syncStatusChanged()
-                        SettingsSyncEventsStatistics.DISABLED_MANUALLY.log(SettingsSyncEventsStatistics.ManualDisableMethod.DISABLED_ONLY)
-                      }
-                    }
-                    SettingsSyncSettings.getInstance().syncEnabled = enableCheckbox.isSelected
+                    handleDisableSync()
                   }
                   // clear the flag
                   remoteSettingsExist.set(false)
@@ -298,21 +292,6 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
           }
         }.visibleIf(actionRequired)
 
-        rowsRange {
-          row {
-            text(message("settings.category.comment.ui.code.system.name"))
-          }
-          row {
-            text(message("settings.category.comment.keymap"))
-          }.topGap(TopGap.NONE)
-          row {
-            text(message("settings.category.comment.plugins"))
-          }.topGap(TopGap.NONE)
-          row {
-            text(message("settings.category.comment.tools"))
-          }.topGap(TopGap.NONE)
-        }.visibleIf(enableCheckbox.selected.not())
-
       }.visibleIf(wasUsedBefore)
 
       // apply necessary changes
@@ -321,16 +300,42 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
     return configPanel
   }
 
-  private fun enableButtonAction(){
+  private fun handleDisableSync() {
+    SettingsSyncSettings.getInstance().syncEnabled = false
     if (SettingsSyncStatusTracker.getInstance().currentStatus is SettingsSyncStatusTracker.SyncStatus.ActionRequired) {
-      val actionRequired = SettingsSyncStatusTracker.getInstance().currentStatus as SettingsSyncStatusTracker.SyncStatus.ActionRequired
-      runWithModalProgressBlocking(ModalTaskOwner.component(configPanel), actionRequired.actionTitle) {
-        actionRequired.execute(syncConfigPanel)
-      }
-      return
+      SettingsSyncStatusTracker.getInstance().clearActionRequired()
     }
+    when (disableSyncOption.get()) {
+      DisableSyncType.DISABLE_AND_REMOVE_DATA -> {
+        disableAndRemoveData()
+        SettingsSyncEventsStatistics.DISABLED_MANUALLY.log(
+          SettingsSyncEventsStatistics.ManualDisableMethod.DISABLED_AND_REMOVED_DATA_FROM_SERVER)
+      }
+      DisableSyncType.DISABLE -> {
+        syncStatusChanged()
+        SettingsSyncEventsStatistics.DISABLED_MANUALLY.log(SettingsSyncEventsStatistics.ManualDisableMethod.DISABLED_ONLY)
+      }
+      else -> {
+        syncStatusChanged()
+        SettingsSyncEventsStatistics.DISABLED_MANUALLY.log(SettingsSyncEventsStatistics.ManualDisableMethod.DISABLED_ONLY)
+      }
+    }
+    disableSyncOption.set(DisableSyncType.DISABLE)
+  }
+
+  private fun enableButtonAction(){
     // enableCheckbox state here has already changed, so we react to it
     if (enableCheckbox.isSelected) {
+      if (SettingsSyncStatusTracker.getInstance().currentStatus is SettingsSyncStatusTracker.SyncStatus.ActionRequired) {
+        val actionRequired = SettingsSyncStatusTracker.getInstance().currentStatus as SettingsSyncStatusTracker.SyncStatus.ActionRequired
+        MessagesService.getInstance().showMessageDialog(
+          null, null, actionRequired.message , message("status.action.settings.sync.pending.action"),
+          arrayOf(Messages.getOkButton()),
+          1, -1, Messages.getInformationIcon(), null, false, null
+        )
+        enableCheckbox.isSelected = false
+        return
+      }
       runWithModalProgressBlocking(ModalTaskOwner.component(configPanel), message("enable.sync.check.server.data.progress")) {
         val (userId, userData, providerCode, providerName) = userDropDownLink.selectedItem ?: run {
           LOG.warn("No selected user")
@@ -354,7 +359,9 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
           withContext(Dispatchers.EDT) {
             triggerUpdateConfigurable()
           }
-          cellDropDownLink.comment?.text = message("sync.status.will.enable")
+          cellDropDownLink.comment?.text = "<icon src='AllIcons.General.History'>&nbsp;" +
+                                           message("sync.status.will.enable",
+                                                   CommonBundle.getApplyButtonText().replace(BundleBase.MNEMONIC_STRING, ""))
         } else {
           enableCheckbox.isSelected = false
         }
@@ -365,6 +372,7 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
       if (syncDisableOption != DisableSyncType.DONT_DISABLE) {
         disableSyncOption.set(syncDisableOption)
         cellDropDownLink.comment?.text = message("sync.status.will.disable")
+        handleDisableSync()
       } else {
         enableCheckbox.isSelected = true
       }
@@ -402,6 +410,7 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
     if (code == 1) {
       enableCheckbox.isSelected = false
       disableSyncOption.set(DisableSyncType.DISABLE)
+      handleDisableSync()
     }
   }
 
@@ -597,39 +606,35 @@ internal class SettingsSyncConfigurable(private val coroutineScope: CoroutineSco
   override fun syncStatusChanged() {
     if (!::cellDropDownLink.isInitialized)
       return
+    updateUserAccountsList()
     if (!enableCheckbox.isSelected) {
       //statusLabel.icon = icons.SettingsSyncIcons.StatusDisabled
       cellDropDownLink.comment?.text = "" //message("sync.status.disabled.message")
       return
     }
+    val currentStatus = SettingsSyncStatusTracker.getInstance().currentStatus
+    actionRequired.set(currentStatus is SettingsSyncStatusTracker.SyncStatus.ActionRequired)
     if (SettingsSyncSettings.getInstance().syncEnabled) {
-      val currentStatus = SettingsSyncStatusTracker.getInstance().currentStatus
-      actionRequired.set(currentStatus is SettingsSyncStatusTracker.SyncStatus.ActionRequired)
-      when(currentStatus) {
-        SettingsSyncStatusTracker.SyncStatus.Success -> {
-          //statusLabel.icon = icons.SettingsSyncIcons.StatusEnabled
+
+      if (currentStatus is SettingsSyncStatusTracker.SyncStatus.ActionRequired) {
+        actionRequiredAction = { currentStatus.execute(syncConfigPanel) }
+        actionRequiredLabel.text = currentStatus.message
+        actionRequiredButton.text = currentStatus.actionTitle
+        cellDropDownLink.comment?.text = message("sync.status.action.required.comment", currentStatus.actionTitle, currentStatus.message)
+      } else {
+        cellDropDownLink.comment?.text = ""
+        actionRequiredAction = null
+        actionRequiredLabel.text = ""
+        actionRequiredButton.text = ""
+        if (currentStatus == SettingsSyncStatusTracker.SyncStatus.Success) {
           val lastSyncTime = SettingsSyncStatusTracker.getInstance().getLastSyncTime()
           if (lastSyncTime > 0) {
-            cellDropDownLink.comment?.text = message("sync.status.last.sync.message", DateFormatUtil.formatPrettyDateTime(lastSyncTime))
+            cellDropDownLink.comment?.text = "<icon src='AllIcons.General.GreenCheckmark'>&nbsp;" + message("sync.status.last.sync.message", DateFormatUtil.formatPrettyDateTime(lastSyncTime))
           } else {
             cellDropDownLink.comment?.text = message("sync.status.enabled")
           }
-        }
-        is SettingsSyncStatusTracker.SyncStatus.Error -> {
+        } else if (currentStatus is SettingsSyncStatusTracker.SyncStatus.Error) {
           cellDropDownLink.comment?.text = message("sync.status.failed", currentStatus.errorMessage)
-          //statusLabel.icon = AllIcons.General.Error
-        }
-        is SettingsSyncStatusTracker.SyncStatus.ActionRequired -> {
-          actionRequiredAction = { currentStatus.execute(syncConfigPanel) }
-          actionRequiredLabel.text = currentStatus.message
-          actionRequiredButton.text = currentStatus.actionTitle
-          //actionRequiredData = Pair(currentStatus.message, currentStatus.actionTitle)
-          /*
-          cellDropDownLink.comment?.text = message("sync.status.action.required", currentStatus.message)
-          //statusLabel.icon = AllIcons.General.BalloonWarning
-          enableCheckbox.text = currentStatus.actionTitle
-          */
-
         }
       }
     }

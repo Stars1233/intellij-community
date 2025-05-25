@@ -141,8 +141,9 @@ public class KotlinCompilerRunner implements CompilerRunner {
 
         org.jetbrains.kotlin.cli.common.ExitCode exitCode = pipeline.execute(kotlinArgs, services, messageCollector);
 
-        //if (diagnostic.hasErrors()) {
-        //  diagnostic.report(Message.create(this, Message.Kind.INFO, "Kotlin build options: " + myContext.getBuilderOptions().getKotlinOptions()));
+        // todo: provide this info under 'verbose' flag
+        //if (messageCollector.hasErrors()) {
+        //  diagnostic.report(Message.create(this, Message.Kind.INFO, "Compilation finished with errors. Compiler options used: " + myContext.getBuilderOptions().getKotlinOptions()));
         //}
 
         completedOk = exitCode == OK;
@@ -151,7 +152,7 @@ public class KotlinCompilerRunner implements CompilerRunner {
       finally {
         processTrackers(out, generatedClasses);
         if (myModuleEntryPath != null) {
-          if (!completedOk || diagnostic.hasErrors()) {
+          if (!completedOk || messageCollector.hasErrors()) {
             byte[] content = myLastGoodModuleEntryContent;
             // ensure the output contains the last known good value
             myStorageManager.getCompositeOutputBuilder().putEntry(myModuleEntryPath, content);
@@ -337,6 +338,8 @@ public class KotlinCompilerRunner implements CompilerRunner {
     arguments.setSkipPrereleaseCheck(true);
     arguments.setAllowUnstableDependencies(true);
     arguments.setDisableStandardScript(true);
+    arguments.setApiVersion("2.1");     // todo: find a way to configure this in input parameters
+    arguments.setLanguageVersion("2.1"); // todo: find a way to configure this in input parameters
     arguments.setAllowKotlinPackage(CLFlags.ALLOW_KOTLIN_PACKAGE.isFlagSet(flags));
     arguments.setWhenGuards(CLFlags.WHEN_GUARDS.isFlagSet(flags));
     arguments.setLambdas(CLFlags.LAMBDAS.getOptionalScalarValue(flags));

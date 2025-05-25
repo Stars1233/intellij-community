@@ -15,10 +15,13 @@ import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.platform.searchEverywhere.*
 import com.intellij.platform.searchEverywhere.providers.AsyncProcessor
 import com.intellij.platform.searchEverywhere.providers.SeAsyncWeightedContributorWrapper
+import com.intellij.platform.searchEverywhere.providers.SeEverywhereFilter
 import com.intellij.platform.searchEverywhere.providers.SeTypeVisibilityStateProviderDelegate
 import com.intellij.platform.searchEverywhere.providers.getExtendedDescription
 import com.intellij.platform.searchEverywhere.providers.target.SeTargetsFilter
 import com.intellij.platform.searchEverywhere.providers.target.SeTypeVisibilityStatePresentation
+import com.intellij.platform.searchEverywhere.utils.SuspendLazyProperty
+import com.intellij.platform.searchEverywhere.utils.suspendLazy
 import com.intellij.psi.codeStyle.NameUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,14 +42,25 @@ class SeTargetItem(val legacyItem: ItemWithPresentation<*>, private val matchers
 class SeTargetsProviderDelegate(private val contributorWrapper: SeAsyncWeightedContributorWrapper<Any>) {
   @Volatile
   private var scopeIdToScope: AtomicReference<Map<String, ScopeDescriptor>> = AtomicReference(emptyMap())
+  val searchScopesInfo: SuspendLazyProperty<SeSearchScopesInfo?> = suspendLazy { getSearchScopesInfo() }
 
   suspend fun <T> collectItems(params: SeParams, collector: SeItemsProvider.Collector) {
     val inputQuery = params.inputQuery
     val defaultMatchers = createDefaultMatchers(inputQuery)
-    val filter = SeTargetsFilter.from(params.filter)
 
-    applyScope(filter.selectedScopeId)
-    SeTypeVisibilityStateProviderDelegate.applyTypeVisibilityStates<T>(contributorWrapper.contributor, filter.hiddenTypes)
+    val scopeToApply: String? = SeEverywhereFilter.isEverywhere(params.filter)?.let { isEverywhere ->
+      searchScopesInfo.getValue()?.let { searchScopesInfo ->
+        if (isEverywhere) searchScopesInfo.everywhereScopeId else searchScopesInfo.projectScopeId
+      }
+    } ?: run {
+      val targetsFilter = SeTargetsFilter.from(params.filter)
+      SeTypeVisibilityStateProviderDelegate.applyTypeVisibilityStates<T>(
+        contributorWrapper.contributor,
+        targetsFilter.hiddenTypes
+      )
+      targetsFilter.selectedScopeId
+    }
+    applyScope(scopeToApply)
 
     coroutineToIndicator {
       val indicator = DelegatingProgressIndicator(ProgressManager.getGlobalProgressIndicator())
@@ -96,7 +110,7 @@ class SeTargetsProviderDelegate(private val contributorWrapper: SeAsyncWeightedC
     contributorWrapper.contributor.getActions { }.filterIsInstance<ScopeChooserAction>().firstOrNull()?.onScopeSelected(scope)
   }
 
-  suspend fun getSearchScopesInfo(): SeSearchScopesInfo? {
+  private suspend fun getSearchScopesInfo(): SeSearchScopesInfo? {
     val contributor = contributorWrapper.contributor
     val scopeChooserAction: ScopeChooserAction = contributor.getActions({ }).filterIsInstance<ScopeChooserAction>().firstOrNull()
                                                  ?: return null

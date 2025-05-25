@@ -1,6 +1,7 @@
 // Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.vcs.git.shared.repo
 
+import com.intellij.ide.vfs.VirtualFileId
 import com.intellij.ide.vfs.virtualFile
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
@@ -47,7 +48,12 @@ class GitRepositoriesFrontendHolder(
     val repo = repositories[repositoryId]
     if (repo != null) return repo
 
-    LOG.error("State of repository $repositoryId is not synchronized. Known repositories are: ${repositories.keys.joinToString { it.toString()}}")
+    cs.launch {
+      if (fixDesynchronizedRepo(repositoryId)) {
+        project.messageBus.syncPublisher(UPDATES).afterUpdate(UpdateType.REPOSITORY_STATE_UPDATED)
+      }
+    }
+
     return GitRepositoryFrontendModelStub(repositoryId)
   }
 
@@ -73,28 +79,8 @@ class GitRepositoriesFrontendHolder(
             is GitRepositoryEvent.RepositoryCreated -> {
               repositories[event.repository.repositoryId] = convertToRepositoryInfo(event.repository)
             }
-            is GitRepositoryEvent.RepositoryDeleted -> {
-              repositories.remove(event.repositoryId)
-            }
-            is GitRepositoryEvent.FavoriteRefsUpdated -> {
-              repositories.computeIfPresent(event.repositoryId) { k, info ->
-                info.favoriteRefs = event.favoriteRefs
-                info
-              }
-            }
-            is GitRepositoryEvent.RepositoryStateUpdated -> {
-              repositories.computeIfPresent(event.repositoryId) { k, info ->
-                info.state = event.newState
-                info
-              }
-            }
-            is GitRepositoryEvent.TagsLoaded -> {
-              repositories.computeIfPresent(event.repositoryId) { k, info ->
-                val refsSet = info.state.refs.copy(tags = event.tags)
-                info.state = info.state.copy(refs = refsSet)
-                info
-              }
-            }
+            is GitRepositoryEvent.RepositoryDeleted -> repositories.remove(event.repositoryId)
+            is GitRepositoryEvent.SingleRepositoryUpdate -> handleSingleRepoUpdate(event)
             GitRepositoryEvent.TagsHidden -> {}
           }
 
@@ -111,6 +97,44 @@ class GitRepositoriesFrontendHolder(
     }
   }
 
+  private suspend fun handleSingleRepoUpdate(event: GitRepositoryEvent.SingleRepositoryUpdate) {
+    val repoId = event.repositoryId
+
+    val repoInfo = repositories.computeIfPresent(repoId) { k, info ->
+      when (event) {
+        is GitRepositoryEvent.FavoriteRefsUpdated -> {
+          info.favoriteRefs = event.favoriteRefs
+        }
+        is GitRepositoryEvent.RepositoryStateUpdated -> {
+          info.state = event.newState
+        }
+        is GitRepositoryEvent.TagsLoaded -> {
+          val refsSet = info.state.refs.copy(tags = event.tags)
+          info.state = info.state.copy(refs = refsSet)
+        }
+      }
+
+      info
+    }
+
+    if (repoInfo == null) {
+      fixDesynchronizedRepo(repoId)
+    }
+  }
+
+  private suspend fun fixDesynchronizedRepo(repoId: RepositoryId): Boolean {
+    LOG.warn("State of repository $repoId is not synchronized. " +
+             "Known repositories are: ${repositories.keys.joinToString { it.toString() }}")
+    val repositoryDto = GitRepositoryApi.getInstance().getRepository(repoId)
+    if (repositoryDto != null) {
+      repositories[repoId] = convertToRepositoryInfo(repositoryDto)
+    }
+    else {
+      LOG.warn("Failed to fetch repository status $repoId")
+    }
+    return repositoryDto != null
+  }
+
   companion object {
     fun getInstance(project: Project): GitRepositoriesFrontendHolder = project.getService(GitRepositoriesFrontendHolder::class.java)
 
@@ -124,6 +148,7 @@ class GitRepositoriesFrontendHolder(
         shortName = repositoryDto.shortName,
         state = repositoryDto.state,
         favoriteRefs = repositoryDto.favoriteRefs,
+        rootFileId = repositoryDto.root,
       )
 
     private fun getUpdateType(rpcEvent: GitRepositoryEvent): UpdateType = when (rpcEvent) {
@@ -150,16 +175,15 @@ private open class GitRepositoryFrontendModelImpl(
   override val shortName: String,
   override var state: GitRepositoryState,
   override var favoriteRefs: GitFavoriteRefs,
+  private val rootFileId: VirtualFileId,
 ) : GitRepositoryFrontendModel {
-  override val root: VirtualFile by lazy {
-    repositoryId.rootPath.virtualFile()
-    ?: error("Cannot deserialize virtual file for repository root $repositoryId")
-  }
+  override val root: VirtualFile?
+    get() = rootFileId.virtualFile()
 }
 
-private class GitRepositoryFrontendModelStub(repositoryId: RepositoryId) : GitRepositoryFrontendModelImpl(
-  repositoryId,
-  "",
-  GitRepositoryState(null, null, GitReferencesSet.EMPTY, emptyList(), GitOperationState.DETACHED_HEAD, emptyMap()),
-  GitFavoriteRefs(emptySet(), emptySet(), emptySet())
-)
+private class GitRepositoryFrontendModelStub(override val repositoryId: RepositoryId) : GitRepositoryFrontendModel {
+  override val shortName = ""
+  override val state = GitRepositoryState(null, null, GitReferencesSet.EMPTY, emptyList(), GitOperationState.DETACHED_HEAD, emptyMap())
+  override val favoriteRefs = GitFavoriteRefs(emptySet(), emptySet(), emptySet())
+  override val root = null
+}

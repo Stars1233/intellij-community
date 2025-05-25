@@ -7932,130 +7932,6 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
         }
 
         @RunWith(JUnit3RunnerWithInners.class)
-        @TestMetadata("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains")
-        public static class ReplaceContains extends AbstractK2IntentionTest {
-            @java.lang.Override
-            @org.jetbrains.annotations.NotNull
-            public final KotlinPluginMode getPluginMode() {
-                return KotlinPluginMode.K2;
-            }
-
-            private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
-            }
-
-            @TestMetadata("asTopLevelFunctions.kt")
-            public void testAsTopLevelFunctions() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/asTopLevelFunctions.kt");
-            }
-
-            @TestMetadata("containsFromJava.kt")
-            public void testContainsFromJava() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/containsFromJava.kt");
-            }
-
-            @TestMetadata("containsInExpression.kt")
-            public void testContainsInExpression() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/containsInExpression.kt");
-            }
-
-            @TestMetadata("extensionFunction.kt")
-            public void testExtensionFunction() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/extensionFunction.kt");
-            }
-
-            @TestMetadata("functionLiteralArgument.kt")
-            public void testFunctionLiteralArgument() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/functionLiteralArgument.kt");
-            }
-
-            @TestMetadata("functionLiteralArgumentAfterSemicolon.kt")
-            public void testFunctionLiteralArgumentAfterSemicolon() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/functionLiteralArgumentAfterSemicolon.kt");
-            }
-
-            @TestMetadata("functionLiteralArgumentAtStartOfBlock.kt")
-            public void testFunctionLiteralArgumentAtStartOfBlock() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/functionLiteralArgumentAtStartOfBlock.kt");
-            }
-
-            @TestMetadata("functionLiteralArgumentInExpression.kt")
-            public void testFunctionLiteralArgumentInExpression() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/functionLiteralArgumentInExpression.kt");
-            }
-
-            @TestMetadata("invalidArgument.kt")
-            public void testInvalidArgument() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/invalidArgument.kt");
-            }
-
-            @TestMetadata("missingArgument.kt")
-            public void testMissingArgument() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/missingArgument.kt");
-            }
-
-            @TestMetadata("missingDefaultArgument.kt")
-            public void testMissingDefaultArgument() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/missingDefaultArgument.kt");
-            }
-
-            @TestMetadata("multipleArguments.kt")
-            public void testMultipleArguments() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/multipleArguments.kt");
-            }
-
-            @TestMetadata("notContains.kt")
-            public void testNotContains() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/notContains.kt");
-            }
-
-            @TestMetadata("qualifier.kt")
-            public void testQualifier() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/qualifier.kt");
-            }
-
-            @TestMetadata("simpleArgument.kt")
-            public void testSimpleArgument() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/simpleArgument.kt");
-            }
-
-            @TestMetadata("simpleStringLiteral.kt")
-            public void testSimpleStringLiteral() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/simpleStringLiteral.kt");
-            }
-
-            @TestMetadata("super.kt")
-            public void testSuper() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/super.kt");
-            }
-
-            @TestMetadata("twoArgsContainsFromJava.kt")
-            public void testTwoArgsContainsFromJava() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/twoArgsContainsFromJava.kt");
-            }
-
-            @TestMetadata("typeArguments.kt")
-            public void testTypeArguments() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/typeArguments.kt");
-            }
-
-            @TestMetadata("unacceptableVararg1.kt")
-            public void testUnacceptableVararg1() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/unacceptableVararg1.kt");
-            }
-
-            @TestMetadata("unacceptableVararg2.kt")
-            public void testUnacceptableVararg2() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/unacceptableVararg2.kt");
-            }
-
-            @TestMetadata("withoutOperatorModifier.kt")
-            public void testWithoutOperatorModifier() throws Exception {
-                runTest("../../../idea/tests/testData/intentions/conventionNameCalls/replaceContains/withoutOperatorModifier.kt");
-            }
-        }
-
-        @RunWith(JUnit3RunnerWithInners.class)
         @TestMetadata("../../../idea/tests/testData/intentions/conventionNameCalls/replaceInvoke")
         public static class ReplaceInvoke extends AbstractK2IntentionTest {
             @java.lang.Override
@@ -8918,7 +8794,119 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
 
 
 
+    @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("../../../idea/tests/testData/intentions/toInfixCall")
+    public static class ToInfixCall extends AbstractK2IntentionTest {
+        @java.lang.Override
+        @org.jetbrains.annotations.NotNull
+        public final KotlinPluginMode getPluginMode() {
+            return KotlinPluginMode.K2;
+        }
 
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("binaryExpressionArgument.kt")
+        public void testBinaryExpressionArgument() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/binaryExpressionArgument.kt");
+        }
+
+        @TestMetadata("caretInsideCalleeExpr.kt")
+        public void testCaretInsideCalleeExpr() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/caretInsideCalleeExpr.kt");
+        }
+
+        @TestMetadata("caretInsideReceiverExpr.kt")
+        public void testCaretInsideReceiverExpr() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/caretInsideReceiverExpr.kt");
+        }
+
+        @TestMetadata("doubleFunctionCall.kt")
+        public void testDoubleFunctionCall() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/doubleFunctionCall.kt");
+        }
+
+        @TestMetadata("doubleFunctionCallWithoutParentheses.kt")
+        public void testDoubleFunctionCallWithoutParentheses() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/doubleFunctionCallWithoutParentheses.kt");
+        }
+
+        @TestMetadata("functionLiteralArgument.kt")
+        public void testFunctionLiteralArgument() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/functionLiteralArgument.kt");
+        }
+
+        @TestMetadata("functionSafeCall.kt")
+        public void testFunctionSafeCall() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/functionSafeCall.kt");
+        }
+
+        @TestMetadata("inapplicableCaretPosition.kt")
+        public void testInapplicableCaretPosition() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/inapplicableCaretPosition.kt");
+        }
+
+        @TestMetadata("multipleArguments.kt")
+        public void testMultipleArguments() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/multipleArguments.kt");
+        }
+
+        @TestMetadata("namedArgument.kt")
+        public void testNamedArgument() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/namedArgument.kt");
+        }
+
+        @TestMetadata("noExplicitReceiver.kt")
+        public void testNoExplicitReceiver() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/noExplicitReceiver.kt");
+        }
+
+        @TestMetadata("notInfix.kt")
+        public void testNotInfix() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/notInfix.kt");
+        }
+
+        @TestMetadata("nullAssertedReceiver.kt")
+        public void testNullAssertedReceiver() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/nullAssertedReceiver.kt");
+        }
+
+        @TestMetadata("packageFunctionCall.kt")
+        public void testPackageFunctionCall() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/packageFunctionCall.kt");
+        }
+
+        @TestMetadata("propertyAccess.kt")
+        public void testPropertyAccess() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/propertyAccess.kt");
+        }
+
+        @TestMetadata("secondParameterLabeled.kt")
+        public void testSecondParameterLabeled() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/secondParameterLabeled.kt");
+        }
+
+        @TestMetadata("simpleArgumentAndFunctionLiteralArgument.kt")
+        public void testSimpleArgumentAndFunctionLiteralArgument() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/simpleArgumentAndFunctionLiteralArgument.kt");
+        }
+
+        @TestMetadata("simpleMethodCall.kt")
+        public void testSimpleMethodCall() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/simpleMethodCall.kt");
+        }
+
+        @TestMetadata("singlePackageFunctionCall.kt")
+        public void testSinglePackageFunctionCall() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/singlePackageFunctionCall.kt");
+        }
+
+        @TestMetadata("zeroArguments.kt")
+        public void testZeroArguments() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/toInfixCall/zeroArguments.kt");
+        }
+    }
 
     @RunWith(JUnit3RunnerWithInners.class)
     @TestMetadata("../../../idea/tests/testData/intentions/convertArrayParameterToVararg")
@@ -10437,7 +10425,84 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
 
 
 
+    @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("../../../idea/tests/testData/intentions/addLabeledReturnInLambda")
+    public static class AddLabeledReturnInLambda extends AbstractK2IntentionTest {
+        @java.lang.Override
+        @org.jetbrains.annotations.NotNull
+        public final KotlinPluginMode getPluginMode() {
+            return KotlinPluginMode.K2;
+        }
 
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("insideParenthesis.kt")
+        public void testInsideParenthesis() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/insideParenthesis.kt");
+        }
+
+        @TestMetadata("labeledLambda.kt")
+        public void testLabeledLambda() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/labeledLambda.kt");
+        }
+
+        @TestMetadata("loop.kt")
+        public void testLoop() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/loop.kt");
+        }
+
+        @TestMetadata("multipleBlocks.kt")
+        public void testMultipleBlocks() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/multipleBlocks.kt");
+        }
+
+        @TestMetadata("multipleHighOrderFun.kt")
+        public void testMultipleHighOrderFun() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/multipleHighOrderFun.kt");
+        }
+
+        @TestMetadata("multipleHighOrderFun2.kt")
+        public void testMultipleHighOrderFun2() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/multipleHighOrderFun2.kt");
+        }
+
+        @TestMetadata("normal.kt")
+        public void testNormal() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/normal.kt");
+        }
+
+        @TestMetadata("notLast.kt")
+        public void testNotLast() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/notLast.kt");
+        }
+
+        @TestMetadata("returnStatement.kt")
+        public void testReturnStatement() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/returnStatement.kt");
+        }
+
+        @TestMetadata("suspend.kt")
+        public void testSuspend() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/suspend.kt");
+        }
+
+        @TestMetadata("unit.kt")
+        public void testUnit() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/unit.kt");
+        }
+
+        @TestMetadata("withLabeledReturn.kt")
+        public void testWithLabeledReturn() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/withLabeledReturn.kt");
+        }
+
+        @TestMetadata("withReturn.kt")
+        public void testWithReturn() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addLabeledReturnInLambda/withReturn.kt");
+        }
+    }
 
 
 

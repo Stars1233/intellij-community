@@ -132,6 +132,8 @@
       "Green": "#1c261c"
     },
 
+    "NavBar.borderColor": "BorderTransparent",
+
     "Popup": {
       "background": "PopupBackground",
       "Header.activeBackground": "PopupBackground",

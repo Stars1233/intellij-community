@@ -108,11 +108,14 @@ public class BuildContextImpl implements BuildContext {
       options.add("8".equals(jvmTarget)? "1.8" : jvmTarget);
     }
 
+    StringBuilder optIns = new StringBuilder();
     for (String annotName : CLFlags.OPT_IN.getValue(flags)) {
-      options.add("-opt-in");
-      options.add(annotName);
+      optIns.append(annotName).append(",");
     }
-    
+    if (!optIns.isEmpty()) {
+      options.add("-opt-in=" + optIns.deleteCharAt(optIns.length() - 1));
+    }
+
     String warn = CLFlags.WARN.getOptionalScalarValue(flags);
     if ("off".equals(warn)) {
       options.add("-nowarn");
@@ -139,7 +142,7 @@ public class BuildContextImpl implements BuildContext {
     return options;
   }
   
-  private static @NotNull List<String> buildJavaOptions(Map<CLFlags, List<String>> flags) {
+  private @NotNull List<String> buildJavaOptions(Map<CLFlags, List<String>> flags) {
     // for now, only options available in the flags map can be specified in the build configuration
     List<String> options = new ArrayList<>();
     options.add("-encoding"); // todo: for now hardcoded
@@ -153,6 +156,11 @@ public class BuildContextImpl implements BuildContext {
       options.add("-target");
       options.add(jvmTarget);
     }
+
+    Path trashDir = DataPaths.getTrashDir(this);
+    options.add("-s");
+    options.add(trashDir.toString()); // put AP-generated sources to trash dir
+
     for (String exp : CLFlags.ADD_EXPORT.getValue(flags)) {
       options.add("--add-exports");
       options.add(exp);
@@ -236,6 +244,9 @@ public class BuildContextImpl implements BuildContext {
   @Override
   public void report(Message msg) {
     try {
+      if (msg.getSource() != null) {
+        myMessageSink.append(msg.getSource().getName()).append(": ");
+      }
       if (msg.getKind() == Message.Kind.ERROR) {
         myHasErrors = true;
         myMessageSink.append("Error: ");

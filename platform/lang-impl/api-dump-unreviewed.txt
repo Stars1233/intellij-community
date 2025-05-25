@@ -2010,6 +2010,7 @@ c:com.intellij.codeInsight.completion.CodeCompletionHandlerBase
 - p:completionFinished(com.intellij.codeInsight.completion.CompletionProgressIndicator,Z):V
 - s:createHandler(com.intellij.codeInsight.completion.CompletionType):com.intellij.codeInsight.completion.CodeCompletionHandlerBase
 - s:createHandler(com.intellij.codeInsight.completion.CompletionType,Z,Z,Z):com.intellij.codeInsight.completion.CodeCompletionHandlerBase
+- s:createHandler(com.intellij.codeInsight.completion.CompletionType,Z,Z,Z,java.lang.String):com.intellij.codeInsight.completion.CodeCompletionHandlerBase
 - handleCompletionElementSelected(com.intellij.codeInsight.lookup.LookupElement,C,com.intellij.codeInsight.completion.OffsetMap,com.intellij.codeInsight.completion.OffsetsInFile,com.intellij.openapi.editor.Editor,java.lang.Integer):V
 - f:invokeCompletion(com.intellij.openapi.project.Project,com.intellij.openapi.editor.Editor):V
 - f:invokeCompletion(com.intellij.openapi.project.Project,com.intellij.openapi.editor.Editor,I):V
@@ -3266,7 +3267,6 @@ f:com.intellij.codeInsight.highlighting.BraceHighlightingHandler
 - f:highlightBraces(com.intellij.openapi.util.TextRange,com.intellij.openapi.util.TextRange,Z,Z,com.intellij.openapi.fileTypes.FileType):V
 - sf:lineMarkFragment(com.intellij.openapi.editor.ex.EditorEx,com.intellij.openapi.editor.Document,I,I,Z):V
 - sf:showScopeHint(com.intellij.openapi.editor.Editor,com.intellij.psi.PsiFile,I,I):V
-- f:updateBraces():V
 f:com.intellij.codeInsight.highlighting.BraceHighlightingHandler$Companion
 - f:createLineMarkerRenderer(Z):com.intellij.openapi.editor.markup.LineMarkerRenderer
 - f:getLazyParsableHighlighterIfAny(com.intellij.openapi.project.Project,com.intellij.openapi.editor.Editor,com.intellij.psi.PsiFile):com.intellij.openapi.editor.highlighter.EditorHighlighter
@@ -7166,6 +7166,7 @@ f:com.intellij.find.FindUtil
 - s:showInUsageView(com.intellij.psi.PsiElement,com.intellij.psi.PsiElement[],java.lang.String,com.intellij.openapi.project.Project):com.intellij.usages.UsageView
 - s:showInUsageView(com.intellij.psi.PsiElement,java.lang.Object[],com.intellij.util.Function,java.lang.String,com.intellij.util.Consumer,com.intellij.openapi.project.Project):com.intellij.usages.UsageView
 - s:updateFindInFileModel(com.intellij.openapi.project.Project,com.intellij.find.FindModel,Z):V
+- s:updateFindNextModel(com.intellij.openapi.project.Project,com.intellij.find.FindModel):V
 - s:useFindStringFromFindInFileModel(com.intellij.find.FindModel,com.intellij.openapi.editor.Editor):V
 com.intellij.find.FindUtil$ReplaceDelegate
 - a:shouldReplace(com.intellij.openapi.util.TextRange,java.lang.String):Z

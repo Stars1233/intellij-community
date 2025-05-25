@@ -469,6 +469,12 @@ jvm_import(
 )
 
 jvm_import(
+    name = "intellij-deps-fastutil-for-patched-kotlin",
+    jar = "@intellij-deps-fastutil-for-patched-kotlin//file",
+    visibility = ["//visibility:public"],
+)
+
+jvm_import(
     name = "netty-common",
     jar = "@netty-common//file",
     source_jar = "@netty-common-sources//file",

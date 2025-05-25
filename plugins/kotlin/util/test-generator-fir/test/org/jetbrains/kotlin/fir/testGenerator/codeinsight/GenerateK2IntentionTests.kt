@@ -78,7 +78,11 @@ internal fun MutableTWorkspace.generateK2IntentionTests() {
             model("${idea}intentions/replaceUnderscoreWithParameterName", pattern = pattern, isIgnored = true)
             model("${idea}intentions/convertFunctionToProperty", pattern = pattern, isIgnored = true)
             model("${idea}intentions/convertTryFinallyToUseCall", pattern = pattern, isIgnored = true)
-            model("${idea}intentions/conventionNameCalls", pattern = pattern)
+            model(
+                "${idea}intentions/conventionNameCalls",
+                pattern = pattern,
+                excludedDirectories = listOf("replaceContains") // is implemented as inspection
+            )
             model("${idea}intentions/mergeIfs", pattern = pattern, isIgnored = false)
             model("${idea}intentions/convertTrimIndentToTrimMargin", pattern = pattern)
             model("${idea}intentions/iterateExpression", pattern = pattern)
@@ -103,7 +107,7 @@ internal fun MutableTWorkspace.generateK2IntentionTests() {
             model("${idea}intentions/valToObject", pattern = pattern, isIgnored = true)
             model("${idea}intentions/convertPropertyInitializerToGetter", pattern = pattern)
             model("${idea}intentions/convertLambdaToSingleLine", pattern = pattern, isIgnored = true)
-            model("${idea}intentions/toInfixCall", pattern = pattern, isIgnored = true)
+            model("${idea}intentions/toInfixCall", pattern = pattern)
             model("${idea}intentions/convertArrayParameterToVararg", pattern = pattern)
             model("${idea}intentions/branched", pattern = pattern, isIgnored = true)
             model("${idea}intentions/convertVariableAssignmentToExpression", pattern = pattern)
@@ -135,7 +139,7 @@ internal fun MutableTWorkspace.generateK2IntentionTests() {
             model("${idea}intentions/convertToIndexedFunctionCall", pattern = pattern, isIgnored = true)
             model("${idea}intentions/samConversionToAnonymousObject", pattern = pattern, isIgnored = true)
             model("${idea}intentions/convertFunctionTypeReceiverToParameter", pattern = pattern, isIgnored = true)
-            model("${idea}intentions/addLabeledReturnInLambda", pattern = pattern, isIgnored = true)
+            model("${idea}intentions/addLabeledReturnInLambda", pattern = pattern)
             model("${idea}intentions/convertFilteringFunctionWithDemorgansLaw", pattern = pattern, isIgnored = true)
             model("${idea}intentions/removeExplicitSuperQualifier", pattern = pattern, isIgnored = true)
             model("${idea}intentions/mergeElseIf", pattern = pattern, isIgnored = true)

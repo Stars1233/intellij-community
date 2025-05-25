@@ -2,15 +2,20 @@
 package com.intellij.openapi.application.impl.islands
 
 import com.intellij.ide.IdeBundle
+import com.intellij.ide.impl.ProjectUtil
 import com.intellij.ide.plugins.PluginManagerConfigurable
 import com.intellij.ide.ui.LafManager
 import com.intellij.ide.ui.laf.UiThemeProviderListManager
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.actionSystem.ex.ActionButtonLook
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.application.ex.ApplicationManagerEx
 import com.intellij.openapi.application.impl.InternalUICustomization
 import com.intellij.openapi.application.impl.ToolWindowUIDecorator
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.impl.EditorEmptyTextPainter
 import com.intellij.openapi.fileEditor.impl.EditorsSplitters
 import com.intellij.openapi.ui.Divider
 import com.intellij.openapi.ui.Messages
@@ -19,6 +24,7 @@ import com.intellij.openapi.ui.Splittable
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.wm.IdeFrame
 import com.intellij.openapi.wm.IdeGlassPane
+import com.intellij.openapi.wm.IdeGlassPaneUtil
 import com.intellij.openapi.wm.impl.IdeBackgroundUtil
 import com.intellij.openapi.wm.impl.IdeGlassPaneImpl
 import com.intellij.openapi.wm.impl.SquareStripeButtonLook
@@ -65,14 +71,18 @@ internal class IslandsUICustomization : InternalUICustomization() {
       val uiThemeManager = UiThemeProviderListManager.getInstance()
       val isLight = JBColor.isBright()
 
-      val newTheme = when (type) {
+      val editorScheme: String
+      var newTheme = when (type) {
         "island" -> {
+          editorScheme = if (isLight) "Light" else "One Island Darker"
           uiThemeManager.findThemeById(if (isLight) "One Island Light" else "One Island Darker")
         }
         "islands" -> {
+          editorScheme = if (isLight) "Light" else "One Island Darker"
           uiThemeManager.findThemeById(if (isLight) "Many Islands Light" else "Many Islands Darker")
         }
         else -> {
+          editorScheme = if (isLight) "Light" else "Dark"
           uiThemeManager.findThemeById(if (isLight) "ExperimentalLight" else "ExperimentalDark")
         }
       }
@@ -80,11 +90,15 @@ internal class IslandsUICustomization : InternalUICustomization() {
       val lafManager = LafManager.getInstance()
 
       if (newTheme == null) {
-        lafManager.setCurrentLookAndFeel((if (isLight) lafManager.defaultLightLaf else lafManager.defaultDarkLaf)!!, true)
+        newTheme = if (isLight) lafManager.defaultLightLaf else lafManager.defaultDarkLaf
+        lafManager.setCurrentLookAndFeel(newTheme!!, true)
       }
       else {
         lafManager.setCurrentLookAndFeel(newTheme, true)
       }
+
+      val colorsManager = EditorColorsManager.getInstance()
+      newTheme.installEditorScheme(colorsManager.getScheme(editorScheme) ?: colorsManager.defaultScheme)
 
       if (PluginManagerConfigurable.showRestartDialog(IdeBundle.message("dialog.title.restart.required"), Function {
           IdeBundle.message("dialog.message.must.be.restarted.for.changes.to.take.effect",
@@ -133,7 +147,7 @@ internal class IslandsUICustomization : InternalUICustomization() {
 
         @Suppress("GraphicsSetClipInspection")
         override fun paintChildren(g: Graphics) {
-          val cornerRadius = JBUI.getInt("Island.arc", 0)
+          val cornerRadius = JBUI.getInt("Island.arc", 10)
 
           if (isIslandsGradientEnabled) {
             putClientProperty(IdeBackgroundUtil.NO_BACKGROUND, null)
@@ -160,6 +174,11 @@ internal class IslandsUICustomization : InternalUICustomization() {
             g.color = color
             g.drawRoundRect(0, 0, width - 1, height - 1, cornerRadius, cornerRadius)
             config.restore()
+          }
+
+          if (FileEditorManager.getInstance(ProjectUtil.getProjectForWindow(frame) ?: return).openFiles.isEmpty()) {
+            val editorEmptyTextPainter = ApplicationManager.getApplication().getService(EditorEmptyTextPainter::class.java)
+            editorEmptyTextPainter.paintEmptyText(IdeGlassPaneUtil.find(this) as JComponent, g)
           }
         }
 
@@ -188,6 +207,12 @@ internal class IslandsUICustomization : InternalUICustomization() {
   override fun configureEditorsSplitters(component: EditorsSplitters) {
     if (isManyIslandEnabled) {
       IslandsRoundedBorder.createEditorBorder(component)
+    }
+  }
+
+  override fun paintBeforeEditorEmptyText(component: JComponent, graphics: Graphics) {
+    if (isManyIslandEnabled) {
+      IslandsRoundedBorder.paintBeforeEditorEmptyText(component, graphics)
     }
   }
 
