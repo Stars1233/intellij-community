@@ -72,6 +72,7 @@ class SeRemoteApiImpl: SeRemoteApi {
   }
 
   override suspend fun getTypeVisibilityStatesForProviders(
+    index: Int,
     projectId: ProjectId,
     sessionRef: DurableRef<SeSessionEntity>,
     dataContextId: DataContextId,
@@ -79,7 +80,7 @@ class SeRemoteApiImpl: SeRemoteApi {
     isAllTab: Boolean,
   ): List<SeTypeVisibilityStatePresentation> {
     val project = projectId.findProjectOrNull() ?: return emptyList()
-    return SeBackendService.getInstance(project).getTypeVisibilityStatesForProviders(sessionRef, dataContextId, providerIds, isAllTab)
+    return SeBackendService.getInstance(project).getTypeVisibilityStatesForProviders(index, sessionRef, dataContextId, providerIds, isAllTab)
   }
 
   override suspend fun getDisplayNameForProviders(

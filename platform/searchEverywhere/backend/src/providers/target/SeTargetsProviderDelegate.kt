@@ -153,13 +153,12 @@ class SeTargetsProviderDelegate(private val contributorWrapper: SeAsyncWeightedC
 
     return SeSearchScopesInfo(scopeDataList,
                               selectedScopeId,
-                              scopeChooserAction.canToggleEverywhere(),
                               projectScopeId,
                               everywhereScopeId)
   }
 
-  fun <T> getTypeVisibilityStates(): List<SeTypeVisibilityStatePresentation> {
+  fun <T> getTypeVisibilityStates(index: Int): List<SeTypeVisibilityStatePresentation> {
     val contributor = contributorWrapper.contributor
-    return SeTypeVisibilityStateProviderDelegate.getStates<T>(contributor)
+    return SeTypeVisibilityStateProviderDelegate.getStates<T>(contributor, index)
   }
 }

@@ -325,7 +325,7 @@ internal class KotlinFunctionCallUsage(
         var firstNamedIndex = newArgumentInfos.firstOrNull {
             !canMixArguments && it.wasNamed ||
                     it.parameter.isNewParameter && it.parameter.defaultValue != null ||
-                    it.resolvedArgument is KtValueArgument && it.parameterIndex < lastParameterIndex //todo varargs
+                    it.shouldSkip()
         }?.parameterIndex
 
         if (firstNamedIndex == null) {
@@ -382,7 +382,7 @@ internal class KotlinFunctionCallUsage(
                 val defaultValueForCall = newReceiverInfo.defaultValueForCall
                 receiverArgument?.let { psiFactory.createExpression(it.text) }
                     ?: defaultValueForCall
-                    ?: psiFactory.createExpression("contextOf()").takeIf { newReceiverInfo.wasContextParameter }
+                    ?: psiFactory.createExpression("contextOf<${newReceiverInfo.currentType.text}>()").takeIf { newReceiverInfo.wasContextParameter && newReceiverInfo.currentType.text != null }
                     ?: psiFactory.createExpression("_")
             } else {
                 null

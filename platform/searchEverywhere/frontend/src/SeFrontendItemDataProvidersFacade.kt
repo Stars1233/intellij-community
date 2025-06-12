@@ -29,7 +29,7 @@ class SeFrontendItemDataProvidersFacade(private val projectId: ProjectId,
   fun hasId(providerId: SeProviderId): Boolean = idsWithDisplayNames.containsKey(providerId)
 
   fun getItems(params: SeParams, disabledProviders: List<SeProviderId>): Flow<SeItemData> {
-    val ids = providerIds.filter { !disabledProviders.contains(it)}
+    val ids = providerIds.filter { !disabledProviders.contains(it) }
 
     return channelFlow {
       val channel = Channel<Int>(capacity = 1, onBufferOverflow = BufferOverflow.SUSPEND)
@@ -50,9 +50,11 @@ class SeFrontendItemDataProvidersFacade(private val projectId: ProjectId,
     }.buffer(0, onBufferOverflow = BufferOverflow.SUSPEND)
   }
 
-  suspend fun itemSelected(itemData: SeItemData,
-                                    modifiers: Int,
-                                    searchText: String): Boolean {
+  suspend fun itemSelected(
+    itemData: SeItemData,
+    modifiers: Int,
+    searchText: String,
+  ): Boolean {
     return SeRemoteApi.getInstance().itemSelected(projectId, sessionRef, itemData, modifiers, searchText, isAllTab = isAllTab)
   }
 
@@ -61,9 +63,9 @@ class SeFrontendItemDataProvidersFacade(private val projectId: ProjectId,
       projectId, providerIds = providerIds, sessionRef = sessionRef, dataContextId = dataContextId, isAllTab = isAllTab
     )
 
-  suspend fun getTypeVisibilityStates(): List<SeTypeVisibilityStatePresentation> =
+  suspend fun getTypeVisibilityStates(index: Int): List<SeTypeVisibilityStatePresentation> =
     SeRemoteApi.getInstance().getTypeVisibilityStatesForProviders(
-      projectId, providerIds = providerIds, sessionRef = sessionRef, dataContextId = dataContextId, isAllTab = isAllTab
+      index = index, projectId = projectId, providerIds = providerIds, sessionRef = sessionRef, dataContextId = dataContextId, isAllTab = isAllTab
     )
 
   suspend fun canBeShownInFindResults(): Boolean {
