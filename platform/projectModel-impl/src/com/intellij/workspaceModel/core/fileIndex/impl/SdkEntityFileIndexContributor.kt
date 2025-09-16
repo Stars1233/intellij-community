@@ -4,7 +4,6 @@ package com.intellij.workspaceModel.core.fileIndex.impl
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.OrderRootType
-import com.intellij.workspaceModel.ide.WsmSingletonEntityUtils
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.platform.workspace.jps.entities.ProjectSettingsEntity
 import com.intellij.platform.workspace.jps.entities.SdkEntity
@@ -12,12 +11,14 @@ import com.intellij.platform.workspace.jps.entities.SdkId
 import com.intellij.platform.workspace.storage.EntityStorage
 import com.intellij.platform.workspace.storage.impl.WorkspaceEntityBase
 import com.intellij.workspaceModel.core.fileIndex.*
+import com.intellij.workspaceModel.ide.WsmSingletonEntityUtils
 import com.intellij.workspaceModel.ide.impl.legacyBridge.sdk.customName
 import com.intellij.workspaceModel.ide.legacyBridge.ModuleDependencyIndex
 
 class SdkEntityFileIndexContributor : WorkspaceFileIndexContributor<SdkEntity>, PlatformInternalWorkspaceFileIndexContributor {
 
   private val useWsmForProjectSdk: Boolean = Registry.`is`("project.root.manager.over.wsm", true)
+  private val useWfiForPartialScanning: Boolean = Registry.`is`("use.workspace.file.index.for.partial.scanning", true)
 
   override val entityClass: Class<SdkEntity>
     get() = SdkEntity::class.java
@@ -30,7 +31,15 @@ class SdkEntityFileIndexContributor : WorkspaceFileIndexContributor<SdkEntity>, 
       compiledRootsData = SdkRootFileSetData(entity.symbolicId)
       sourceRootFileSetData = SdkSourceRootFileSetData(entity.symbolicId)
     }
-    else {
+    else if (useWfiForPartialScanning) {
+      val enforced = WorkspaceFileIndexContributorEnforcer.EP_NAME
+        .extensionsIfPointIsRegistered.any { it.shouldContribute(entity, storage) }
+      if (!enforced && !storage.hasReferrers(entity.symbolicId)) {
+        return
+      }
+      compiledRootsData = SdkRootFileSetData(entity.symbolicId)
+      sourceRootFileSetData = SdkSourceRootFileSetData(entity.symbolicId)
+    } else {
       compiledRootsData = UnloadableSdkRootFileSetData(entity.symbolicId)
       sourceRootFileSetData = UnloadableSdkSourceRootFileSetData(entity.symbolicId)
     }
@@ -47,14 +56,7 @@ class SdkEntityFileIndexContributor : WorkspaceFileIndexContributor<SdkEntity>, 
 
   override val dependenciesOnOtherEntities: List<DependencyDescription<SdkEntity>>
     get() = listOf(
-      DependencyDescription.OnArbitraryEntity(ProjectSettingsEntity::class.java) {
-        if (it is WorkspaceEntityBase) {
-          val jdk = it.projectSdk?.resolve(it.snapshot)
-          if (jdk != null) return@OnArbitraryEntity sequenceOf(jdk)
-        }
-
-        return@OnArbitraryEntity sequenceOf()
-      }
+      DependencyDescription.OnReference(SdkId::class.java),
     )
 
   private fun isProjectSdk(entity: SdkEntity, storage: EntityStorage): Boolean {
