@@ -106,10 +106,11 @@ class SoftwareBillOfMaterialsImpl(
   private val distributionFiles: List<DistributionFileEntry>
 ) : SoftwareBillOfMaterials {
   private companion object {
-    val JETBRAINS_GITHUB_ORGANIZATIONS: Set<String> = setOf("JetBrains", "Kotlin")
     /**
      * Cannot be enabled by default because the Maven resolver doesn't resolve pom.xml reproducibly, see IJI-1882.
      * It may resolve nothing, hence no metadata like a supplier value, hence sporadic failures of [checkNtiaConformance].
+     *
+     * Also, the full verification is required, see IJI-2119.
      */
     val STRICT_MODE: Boolean = System.getProperty("intellij.build.sbom.strictMode", "false").toBoolean()
   }
@@ -183,6 +184,11 @@ class SoftwareBillOfMaterialsImpl(
     document.specVersion = specVersion
     document.dataLicense = parseLicense(document, SpdxConstants.SPDX_DATA_LICENSE_ID)
     document.setName(name)
+    document.setComment(
+      "This document represents the ongoing effort in providing the complete SBOM for IntelliJ-based IDEs. " +
+      "At the moment, it should be considered a work in progress. " +
+      "The content may lack important details and therefore should not be used to draw any conclusions from it."
+    )
     return document
   }
 
@@ -197,7 +203,6 @@ class SoftwareBillOfMaterialsImpl(
 
   override suspend fun generate() {
     val skipReason = when {
-      true -> "IJI-2177"
       !context.shouldBuildDistributions() -> "No distribution was built"
       documentNamespace == null -> "Document namespace isn't specified"
       context.productProperties.sbomOptions.creator == null -> "Document creator isn't specified"
@@ -495,20 +500,16 @@ class SoftwareBillOfMaterialsImpl(
         JpsJavaExtensionService.dependencies(module)
           .includedIn(JpsJavaClasspathKind.PRODUCTION_RUNTIME)
           .libraries.asSequence()
-          .map { it to module }
       }.distinctBy {
-        it.first.mavenDescriptor?.mavenId ?: it.first.name
-      }.groupBy({ it.first }, { it.second }).map { (library, modules) ->
+        it.mavenDescriptor?.mavenId ?: it.name
+      }.map { library ->
         val libraryName = getLibraryFilename(library)
         async(CoroutineName("maven library $libraryName")) {
           val libraryEntry = librariesBundledInDistributions.get(libraryName)
           val libraryFile = libraryEntry?.libraryFile ?: return@async null
           val libraryLicense = context.productProperties.allLibraryLicenses.firstOrNull {
             it.getLibraryNames().contains(libraryName)
-          }
-          checkNotNull(libraryLicense) {
-            "Missing license for '$libraryName' used in ${modules.joinToString { "'${it.name}'" }} modules"
-          }
+          } ?: return@async null
           val mavenDescriptor = library.mavenDescriptor
           if (mavenDescriptor != null) {
             mavenLibrary(mavenDescriptor = mavenDescriptor, libraryFile = libraryFile, libraryEntry = libraryEntry, libraryLicense = libraryLicense)
@@ -522,7 +523,7 @@ class SoftwareBillOfMaterialsImpl(
             ).takeIf { it.coordinates != null }
           }
         }
-      }.mapNotNull { it.await() }
+      }.toList().mapNotNull { it.await() }
     }
   }
 
@@ -755,10 +756,7 @@ class SoftwareBillOfMaterialsImpl(
     }
 
     val isSupplierJetBrains: Boolean by lazy {
-      library.license == LibraryLicense.JETBRAINS_OWN || JETBRAINS_GITHUB_ORGANIZATIONS.any {
-        library.url?.startsWith("https://github.com/$it/") == true ||
-        library.licenseUrl?.startsWith("https://github.com/$it/") == true
-      }
+      LibraryLicense.isJetBrainsOwnLibrary(library)
     }
 
     val isSupplierApache: Boolean by lazy {
@@ -948,6 +946,7 @@ class SoftwareBillOfMaterialsImpl(
   }
 
   private fun validate(modelObject: ModelObject) {
+    if (!STRICT_MODE) return
     val errors = modelObject.verify()
     check(errors.none()) {
       errors.joinToString(separator = "\n")
