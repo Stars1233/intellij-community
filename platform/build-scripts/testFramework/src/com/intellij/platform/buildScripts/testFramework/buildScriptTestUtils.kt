@@ -128,6 +128,7 @@ fun runTestBuild(
   buildTools: ProprietaryBuildTools = ProprietaryBuildTools.DUMMY,
   isReproducibilityTestAllowed: Boolean = true,
   checkIntegrityOfEmbeddedFrontend: Boolean = true,
+  checkPrivatePluginModulesAreNotPublic: Boolean = true,
   build: suspend (BuildContext) -> Unit = { buildDistributions(context = it) },
   onSuccess: suspend (BuildContext) -> Unit = {},
   buildOptionsCustomizer: (BuildOptions) -> Unit = {}
@@ -138,18 +139,23 @@ fun runTestBuild(
       launch {
         doRunTestBuild(
           context = BuildContextImpl.createContext(
-            homeDir,
-            productProperties,
+            projectHome = homeDir,
+            productProperties = productProperties,
             setupTracer = false,
-            buildTools,
-            createBuildOptionsForTest(productProperties = productProperties, homeDir = homeDir, testInfo = testInfo, 
-                                               customizer = buildOptionsCustomizer).also {
+            proprietaryBuildTools = buildTools,
+            options = createBuildOptionsForTest(
+              productProperties = productProperties,
+              homeDir = homeDir,
+              testInfo = testInfo,
+              customizer = buildOptionsCustomizer,
+            ).also {
               reproducibilityTest.configure(it)
             }
           ),
           traceSpanName = "${testInfo.spanName}#${iterationNumber}",
           writeTelemetry = false,
           checkIntegrityOfEmbeddedFrontend = checkIntegrityOfEmbeddedFrontend,
+          checkPrivatePluginModulesAreNotPublic = checkPrivatePluginModulesAreNotPublic,
           checkThatBundledPluginInFrontendArePresent = checkIntegrityOfEmbeddedFrontend,
           build = { context ->
             build(context)
@@ -167,8 +173,12 @@ fun runTestBuild(
         productProperties = productProperties,
         setupTracer = false,
         proprietaryBuildTools = buildTools,
-        options = createBuildOptionsForTest(productProperties = productProperties, homeDir = homeDir, testInfo = testInfo, 
-                                            customizer = buildOptionsCustomizer),
+        options = createBuildOptionsForTest(
+          productProperties = productProperties,
+          homeDir = homeDir,
+          testInfo = testInfo,
+          customizer = buildOptionsCustomizer,
+        ),
       ),
       writeTelemetry = true,
       checkIntegrityOfEmbeddedFrontend = checkIntegrityOfEmbeddedFrontend,
@@ -187,20 +197,31 @@ suspend fun runTestBuild(
   testInfo: TestInfo,
   context: suspend () -> BuildContext,
   checkThatBundledPluginInFrontendArePresent: Boolean = true,
+  checkPrivatePluginModulesAreNotPublic: Boolean = true,
   build: suspend (BuildContext) -> Unit = { buildDistributions(it) }
 ) {
-  doRunTestBuild(context = context(), traceSpanName = testInfo.spanName, writeTelemetry = true, 
-                 checkIntegrityOfEmbeddedFrontend = true,
-                 checkThatBundledPluginInFrontendArePresent = checkThatBundledPluginInFrontendArePresent,
-                 build = build)
+  doRunTestBuild(
+    context = context(),
+    traceSpanName = testInfo.spanName,
+    writeTelemetry = true,
+    checkIntegrityOfEmbeddedFrontend = true,
+    checkThatBundledPluginInFrontendArePresent = checkThatBundledPluginInFrontendArePresent,
+    checkPrivatePluginModulesAreNotPublic = checkPrivatePluginModulesAreNotPublic,
+    build = build,
+  )
 }
 
 private val defaultLogFactory = Logger.getFactory()
 
-private suspend fun doRunTestBuild(context: BuildContext, traceSpanName: String, writeTelemetry: Boolean,
-                                   checkIntegrityOfEmbeddedFrontend: Boolean,
-                                   checkThatBundledPluginInFrontendArePresent: Boolean,
-                                   build: suspend (context: BuildContext) -> Unit) {
+private suspend fun doRunTestBuild(
+  context: BuildContext,
+  traceSpanName: String,
+  writeTelemetry: Boolean,
+  checkIntegrityOfEmbeddedFrontend: Boolean,
+  checkThatBundledPluginInFrontendArePresent: Boolean,
+  checkPrivatePluginModulesAreNotPublic: Boolean = true,
+  build: suspend (context: BuildContext) -> Unit,
+) {
   var outDir: Path? = null
   var traceFile: Path? = null
   var error: Throwable? = null
@@ -232,7 +253,9 @@ private suspend fun doRunTestBuild(context: BuildContext, traceSpanName: String,
           }
         }
 
-        checkPrivatePluginModulesAreNotPublic(context, softly)
+        if (checkPrivatePluginModulesAreNotPublic) {
+          checkPrivatePluginModulesAreNotPublic(context, softly)
+        }
         softly.assertAll()
       }
       catch (e: CancellationException) {

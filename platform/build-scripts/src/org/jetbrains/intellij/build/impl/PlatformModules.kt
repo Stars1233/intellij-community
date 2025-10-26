@@ -1,9 +1,9 @@
 // Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("ReplaceJavaStaticMethodWithKotlinAnalog", "RedundantSuppression", "ReplaceGetOrSet")
-
+@file:Suppress("ReplaceJavaStaticMethodWithKotlinAnalog", "RedundantSuppression", "ReplaceGetOrSet", "ReplacePutWithAssignment")
 package org.jetbrains.intellij.build.impl
 
 import com.intellij.openapi.util.JDOMUtil
+import com.intellij.platform.plugins.parser.impl.elements.ModuleLoadingRule
 import io.opentelemetry.api.trace.Span
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet
 import kotlinx.collections.immutable.PersistentList
@@ -15,15 +15,17 @@ import kotlinx.coroutines.withContext
 import org.jdom.CDATA
 import org.jdom.Element
 import org.jetbrains.intellij.build.BuildContext
+import org.jetbrains.intellij.build.ContentModuleFilter
 import org.jetbrains.intellij.build.FrontendModuleFilter
 import org.jetbrains.intellij.build.PLATFORM_LOADER_JAR
-import org.jetbrains.intellij.build.ProductModulesLayout
 import org.jetbrains.intellij.build.UTIL_8_JAR
 import org.jetbrains.intellij.build.UTIL_JAR
 import org.jetbrains.intellij.build.UTIL_RT_JAR
 import org.jetbrains.intellij.build.impl.PlatformJarNames.PRODUCT_BACKEND_JAR
 import org.jetbrains.intellij.build.impl.PlatformJarNames.PRODUCT_JAR
 import org.jetbrains.intellij.build.impl.PlatformJarNames.TEST_FRAMEWORK_JAR
+import org.jetbrains.intellij.build.productLayout.ProductModulesLayout
+import org.jetbrains.intellij.build.productLayout.buildProductContentXml
 import org.jetbrains.jps.model.java.JavaSourceRootType
 import org.jetbrains.jps.model.java.JpsJavaClasspathKind
 import org.jetbrains.jps.model.java.JpsJavaExtensionService
@@ -43,7 +45,6 @@ import java.util.SortedSet
  */
 @Suppress("RemoveRedundantQualifierName")
 private val PLATFORM_CORE_MODULES = java.util.List.of(
-  "intellij.platform.analysis",
   "intellij.platform.builtInServer",
   "intellij.platform.diff",
   "intellij.platform.editor.ui",
@@ -381,7 +382,7 @@ fun collectExportedLibrariesFromLibraryModules(
     .filter { it.moduleName.startsWith(LIB_MODULE_PREFIX) }
     .forEach { moduleItem ->
       val module = context.findRequiredModule(moduleItem.moduleName)
-      // Get all library dependencies from the module
+      // get all library dependencies from the module
       module.dependenciesList.dependencies
         .asSequence()
         .filterIsInstance<JpsLibraryDependency>()
@@ -391,7 +392,7 @@ fun collectExportedLibrariesFromLibraryModules(
         }
         .mapNotNull { it.library?.name }
         .forEach { libName ->
-          result[libName] = moduleItem.moduleName
+          result.put(libName, moduleItem.moduleName)
         }
     }
 
@@ -400,7 +401,7 @@ fun collectExportedLibrariesFromLibraryModules(
 
 private fun getProductModuleJarName(moduleName: String, context: BuildContext, frontendModuleFilter: FrontendModuleFilter): String {
   return when {
-    isModuleCloseSource(moduleName, context = context) -> if (frontendModuleFilter.isBackendModule(moduleName)) PRODUCT_BACKEND_JAR else PRODUCT_JAR
+    isModuleCloseSource(moduleName = moduleName, context = context) -> if (frontendModuleFilter.isBackendModule(moduleName)) PRODUCT_BACKEND_JAR else PRODUCT_JAR
     else -> PlatformJarNames.getPlatformModuleJarName(moduleName, frontendModuleFilter)
   }
 }
@@ -429,7 +430,7 @@ internal fun computeProjectLibsUsedByPlugins(enabledPluginModules: Set<String>, 
         }
 
         val packMode = PLATFORM_CUSTOM_PACK_MODE.getOrDefault(libName, LibraryPackMode.MERGED)
-        result.addOrGet(ProjectLibraryData(libName, packMode, reason = "<- $moduleName"))
+        result.addOrGet(ProjectLibraryData(libraryName = libName, packMode = packMode, reason = "<- $moduleName"))
           .dependentModules
           .computeIfAbsent(plugin.directoryName) { mutableListOf() }
           .add(moduleName)
@@ -447,7 +448,7 @@ suspend fun getEnabledPluginModules(pluginsToPublish: Set<PluginLayout>, context
 }
 
 private fun isModuleCloseSource(moduleName: String, context: BuildContext): Boolean {
-  if (moduleName.endsWith(".resources") || moduleName.endsWith(".icons")) {
+  if (moduleName.endsWith(".resources") || moduleName.endsWith(".icons") || moduleName.startsWith(LIB_MODULE_PREFIX)) {
     return false
   }
 
@@ -456,8 +457,8 @@ private fun isModuleCloseSource(moduleName: String, context: BuildContext): Bool
     return false
   }
 
-  return sourceRoots.any { moduleSourceRoot ->
-    !moduleSourceRoot.path.startsWith(context.paths.communityHomeDir)
+  return sourceRoots.any {
+    !it.path.startsWith(context.paths.communityHomeDir)
   }
 }
 
@@ -552,13 +553,15 @@ private fun computeTransitive(
   }
 }
 
+private val regenerateProductSpec = System.getProperty("intellij.build.regenerate.product.spec", "true").toBoolean()
+
 // result _must be_ consistent, do not use Set.of or HashSet here
 private suspend fun processAndGetProductPluginContentModules(
   context: BuildContext,
   layout: PlatformLayout,
   includedPlatformModulesPartialList: Sequence<String>,
 ): Set<ModuleItem> {
-  val xIncludePathResolver = createXIncludePathResolver(includedPlatformModulesPartialList, context)
+  val xIncludePathResolver = createXIncludePathResolver(includedPlatformModulesPartialList.distinct().toList(), context)
   return withContext(Dispatchers.IO) {
     val productPluginSourceModuleName = context.productProperties.applicationInfoModule
     val file = requireNotNull(
@@ -566,24 +569,54 @@ private suspend fun processAndGetProductPluginContentModules(
       ?: context.findFileInModuleSources(moduleName = productPluginSourceModuleName, relativePath = "META-INF/${context.productProperties.platformPrefix}Plugin.xml")
     ) { "Cannot find product plugin descriptor in '$productPluginSourceModuleName' module" }
 
-    val xml = JDOMUtil.load(file)
-    resolveNonXIncludeElement(original = xml, base = file, pathResolver = xIncludePathResolver, trackSourceFile = true)
-    val result = collectAndEmbedProductModules(root = xml, xIncludePathResolver = xIncludePathResolver, context = context)
-    val data = JDOMUtil.write(xml)
-    val fileName = file.fileName.toString()
-    layout.withPatch { moduleOutputPatcher, _, _ ->
-      moduleOutputPatcher.patchModuleOutput(moduleName = productPluginSourceModuleName, path = "META-INF/$fileName", content = data)
+    val originalContent: String
+    val xml: Element
+    val moduleToSetChainMapping: Map<String, List<String>>?
+    // process programmatic content modules if defined
+    val programmaticModulesSpec = context.productProperties.getProductContentDescriptor()
+    if (programmaticModulesSpec == null || !regenerateProductSpec) {
+      originalContent = Files.readString(file)
+      xml = JDOMUtil.load(originalContent)
+      resolveNonXIncludeElement(original = xml, base = file, pathResolver = xIncludePathResolver, trackSourceFile = true)
+      moduleToSetChainMapping = null
+    }
+    else {
+      val sb = StringBuilder()
+      val result = buildProductContentXml(
+        spec = programmaticModulesSpec,
+        moduleOutputProvider = context,
+        sb = sb,
+        inlineXmlIncludes = true,
+      )
+      Span.current().addEvent("Generated ${result.contentBlocks.size} content blocks with ${result.contentBlocks.sumOf { it.modules.size }} total modules")
+
+      originalContent = sb.toString()
+      xml = JDOMUtil.load(sb)
+      resolveNonXIncludeElement(original = xml, base = file, pathResolver = xIncludePathResolver, trackSourceFile = false)
+      moduleToSetChainMapping = result.moduleToSetChainMapping
     }
 
-    result
+    val moduleItems = collectAndEmbedProductModules(
+      root = xml,
+      xIncludePathResolver = xIncludePathResolver,
+      context = context,
+      moduleToSetChainOverride = moduleToSetChainMapping
+    )
+    val data = JDOMUtil.write(xml)
+    if (data != originalContent) {
+      layout.withPatch { moduleOutputPatcher, _, _ ->
+        moduleOutputPatcher.patchModuleOutput(moduleName = productPluginSourceModuleName, path = "META-INF/${file.fileName}", content = data)
+      }
+    }
+    layout.cachedDescriptorContainer.productDescriptor = xml
+
+    moduleItems
   }
 }
 
 // todo implement correct processing
 @Suppress("RemoveRedundantQualifierName")
 private val excludedPaths = java.util.Set.of(
-  "/META-INF/ultimate.xml",
-  "/META-INF/ultimate-services.xml",
   "/META-INF/cwmBackendConnection.xml",
   "/META-INF/cwmConnectionFrontend.xml",
   "/META-INF/clientUltimate.xml",
@@ -595,7 +628,10 @@ private val COMMUNITY_IMPL_EXTENSIONS = setOf(
   "/META-INF/community-extensions.xml"
 )
 
-fun createXIncludePathResolver(includedPlatformModulesPartialList: Sequence<String>, context: BuildContext): XIncludePathResolver {
+fun createXIncludePathResolver(
+  includedPlatformModulesPartialList: List<String>,
+  context: BuildContext,
+): XIncludePathResolver {
   return object : XIncludePathResolver {
     override fun resolvePath(relativePath: String, base: Path?, isOptional: Boolean, isDynamic: Boolean): Path? {
       if ((isOptional || isDynamic || excludedPaths.contains(relativePath)) && !COMMUNITY_IMPL_EXTENSIONS.contains(relativePath)) {
@@ -606,6 +642,17 @@ fun createXIncludePathResolver(includedPlatformModulesPartialList: Sequence<Stri
       }
 
       val loadPath = toLoadPath(relativePath)
+
+      // Resolve module set files directly from generated directories
+      if (loadPath.startsWith("META-INF/intellij.moduleSets.")) {
+        for (provider in context.productProperties.moduleSetsProviders) {
+          val file = provider.getOutputDirectory(context.paths).resolve(loadPath)
+          if (Files.exists(file)) {
+            return file
+          }
+        }
+      }
+
       if (base != null) {
         val parent = base.parent
         val file = if (parent.endsWith("META-INF") && loadPath.startsWith("META-INF/")) {
@@ -619,7 +666,7 @@ fun createXIncludePathResolver(includedPlatformModulesPartialList: Sequence<Stri
         }
       }
 
-      for (module in includedPlatformModulesPartialList.distinct()) {
+      for (module in includedPlatformModulesPartialList) {
         findFileInModuleSources(context.findRequiredModule(module), loadPath)?.let {
           return it
         }
@@ -657,11 +704,12 @@ suspend fun embedContentModules(file: Path, xIncludePathResolver: XIncludePathRe
   }
 }
 
-// see PluginXmlPathResolver.toLoadPath
-private fun toLoadPath(relativePath: String): String {
+// see isV2ModulePath
+internal fun toLoadPath(relativePath: String): String {
+  @Suppress("SpellCheckingInspection")
   return when {
     relativePath[0] == '/' -> relativePath.substring(1)
-    relativePath.startsWith("intellij.") -> relativePath
+    relativePath.startsWith("intellij.") || relativePath.startsWith("fleet.") -> relativePath
     else -> "META-INF/$relativePath"
   }
 }
@@ -676,53 +724,98 @@ private fun getModuleDescriptor(moduleName: String, jpsModuleName: String, xIncl
   return xml
 }
 
-private suspend fun collectAndEmbedProductModules(root: Element, xIncludePathResolver: XIncludePathResolver, context: BuildContext): Set<ModuleItem> {
+private suspend fun collectAndEmbedProductModules(
+  root: Element,
+  xIncludePathResolver: XIncludePathResolver,
+  context: BuildContext,
+  moduleToSetChainOverride: Map<String, List<String>>? = null
+): Set<ModuleItem> {
   val frontendModuleFilter = context.getFrontendModuleFilter()
   val contentModuleFilter = context.getContentModuleFilter()
-  val result = LinkedHashSet<ModuleItem>()
-  val moduleElements = root.getChildren("content").flatMap { it.getChildren("module") }
-  for (moduleElement in moduleElements) {
-    val moduleName = moduleElement.getAttributeValue("name") ?: continue
-    val loadingRule = moduleElement.getAttributeValue("loading")
-    val dependencyHelper = (context as BuildContextImpl).jarPackagerDependencyHelper
-    if (dependencyHelper.isOptionalLoadingRule(loadingRule) && !contentModuleFilter.isOptionalModuleIncluded(moduleName, pluginMainModuleName = null)) {
-      Span.current().addEvent("Tag for module '$moduleName' is removed from the core plugin by $contentModuleFilter")
-      moduleElement.parent.removeContent(moduleElement)
-      continue
-    }
-
-    val isEmbedded = loadingRule == "embedded"
-    val relativeOutFile = if (isEmbedded && isModuleCloseSource(moduleName, context = context)) {
-      if (frontendModuleFilter.isBackendModule(moduleName)) PRODUCT_BACKEND_JAR else PRODUCT_JAR
-    }
-    else {
-      "$moduleName.jar"
-    }
-
-    // Extract module set from parent <content> element's source-file attribute
-    val contentElement = moduleElement.parentElement
-    val moduleSet = contentElement?.getAttributeValue(SOURCE_FILE_ATTRIBUTE)?.removeSuffix(".xml")
-    result.add(
-      ModuleItem(
-        moduleName = moduleName,
-        relativeOutputFile = relativeOutFile,
-        reason = if (isEmbedded) ModuleIncludeReasons.PRODUCT_EMBEDDED_MODULES else ModuleIncludeReasons.PRODUCT_MODULES,
-        moduleSet = moduleSet,
+  val moduleItems = LinkedHashSet<ModuleItem>()
+  for (content in root.getChildren("content")) {
+    val iterator = content.getChildren("module").iterator()
+    while (iterator.hasNext()) {
+      processProductModule(
+        iterator = iterator,
+        context = context,
+        contentModuleFilter = contentModuleFilter,
+        frontendModuleFilter = frontendModuleFilter,
+        result = moduleItems,
+        xIncludePathResolver = xIncludePathResolver,
+        moduleToSetChainOverride = moduleToSetChainOverride,
       )
-    )
-    PRODUCT_MODULE_IMPL_COMPOSITION.get(moduleName)?.let { list ->
-      list
-        .filter { !context.productProperties.productLayout.productImplementationModules.contains(it) }
-        .mapTo(result) { subModuleName ->
-          ModuleItem(moduleName = subModuleName, relativeOutputFile = relativeOutFile, reason = ModuleIncludeReasons.PRODUCT_MODULES, moduleSet = moduleSet)
-        }
     }
+  }
+  return moduleItems
+}
 
+private fun processProductModule(
+  iterator: MutableIterator<Element>,
+  context: BuildContext,
+  contentModuleFilter: ContentModuleFilter,
+  frontendModuleFilter: FrontendModuleFilter,
+  result: LinkedHashSet<ModuleItem>,
+  xIncludePathResolver: XIncludePathResolver,
+  moduleToSetChainOverride: Map<String, List<String>>? = null,
+) {
+  val moduleElement = iterator.next()
+  val moduleName = moduleElement.getAttributeValue("name") ?: return
+  val loadingRule = moduleElement.getAttributeValue("loading")
+  val dependencyHelper = (context as BuildContextImpl).jarPackagerDependencyHelper
+  if (dependencyHelper.isOptionalLoadingRule(loadingRule) && !contentModuleFilter.isOptionalModuleIncluded(moduleName = moduleName, pluginMainModuleName = null)) {
+    Span.current().addEvent("Tag for module '$moduleName' is removed from the core plugin by $contentModuleFilter")
+    iterator.remove()
+    return
+  }
+
+  val isEmbedded = loadingRule == ModuleLoadingRule.EMBEDDED.name.lowercase()
+  val isInScrambledFile = isEmbedded && isModuleCloseSource(moduleName = moduleName, context = context)
+  val relativeOutFile = if (isInScrambledFile) {
+    if (frontendModuleFilter.isBackendModule(moduleName)) PRODUCT_BACKEND_JAR else PRODUCT_JAR
+  }
+  else {
+    "$moduleName.jar"
+  }
+
+  // extract module set from override mapping (for programmatic spec)
+  val moduleSet = moduleToSetChainOverride?.get(moduleName)
+  result.add(
+    ModuleItem(
+      moduleName = moduleName,
+      relativeOutputFile = relativeOutFile,
+      reason = if (isEmbedded) ModuleIncludeReasons.PRODUCT_EMBEDDED_MODULES else ModuleIncludeReasons.PRODUCT_MODULES,
+      moduleSet = moduleSet,
+    )
+  )
+  PRODUCT_MODULE_IMPL_COMPOSITION.get(moduleName)?.let { list ->
+    list
+      .filter { !context.productProperties.productLayout.productImplementationModules.contains(it) }
+      .mapTo(result) { subModuleName ->
+        ModuleItem(moduleName = subModuleName, relativeOutputFile = relativeOutFile, reason = ModuleIncludeReasons.PRODUCT_MODULES, moduleSet = moduleSet)
+      }
+  }
+
+  // We do not embed the module descriptor because scrambling can rename classes.
+  //
+  // However, we cannot rely solely on the `PLUGIN_CLASSPATH` descriptor: for non-embedded modules,
+  // xi:included files (e.g., META-INF/VcsExtensionPoints.xml) are not resolvable from the core classpath,
+  // since a non-embedded module uses a separate classloader.
+  //
+  // Because scrambling applies only (by policy) to embedded modules, we embed the module descriptor
+  // for non-embedded modules to address this.
+  //
+  // Note: We could implement runtime loading via the module’s classloader, but that would
+  // significantly complicate the runtime code.
+  if (!isInScrambledFile) {
     check(moduleElement.content.isEmpty())
     val moduleDescriptor = getModuleDescriptor(moduleName = moduleName, jpsModuleName = moduleName, xIncludePathResolver = xIncludePathResolver, context = context)
     moduleElement.setContent(CDATA(JDOMUtil.write(moduleDescriptor)))
   }
-  return result
+  // For Gateway or a module-based loader, where PLUGIN_CLASSPATH isn’t used, performance will be slightly affected
+  // (most product modules shouldn’t be embedded anyway).
+  // That’s acceptable because remote development will be migrated to the path-based class loader anyway.
+  // We prefer not to increase code complexity without a strong reason.
 }
 
 // Contrary to what it looks like, this is not a step back.

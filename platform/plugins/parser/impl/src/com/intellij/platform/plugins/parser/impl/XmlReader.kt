@@ -1,5 +1,6 @@
 // Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:JvmName("XmlReader")
+@file:Suppress("ReplacePutWithAssignment")
 
 package com.intellij.platform.plugins.parser.impl
 
@@ -412,13 +413,13 @@ private fun readExtensionPoints(
     if (elementName != PluginXmlConst.EXTENSION_POINT_ELEM) {
       if (elementName == PluginXmlConst.INCLUDE_ELEM && reader.namespaceURI == PluginXmlConst.XINCLUDE_NAMESPACE_URI) {
         val partial = PluginDescriptorFromXmlStreamConsumer.withIncludeBase(
-          consumer.readContext,
-          consumer.xIncludeLoader,
-          consumer.includeBase,
+          readContext = consumer.readContext,
+          xIncludeLoader = consumer.xIncludeLoader,
+          includeBase = consumer.includeBase,
         )
         readInclude(
-          partial,
-          reader,
+          consumer = partial,
+          reader = reader,
           allowedPointer = PluginXmlConst.EXTENSION_POINTS_XINCLUDE_VALUE
         )
         LOG.warn("`include` is supported only on a root level (${reader.location})")
@@ -811,19 +812,21 @@ private fun readInclude(
   }
 
   var readError: IOException? = null
+  val targetPath = LoadPathUtil.toLoadPath(relativePath = path, baseDir = consumer.includeBase)
   val loadedXInclude = try {
-    val targetPath = LoadPathUtil.toLoadPath(relativePath = path, baseDir = consumer.includeBase)
     xIncludeLoader.loadXIncludeReference(path = targetPath)
   }
   catch (e: IOException) {
     readError = e
     null
   }
+
   if (loadedXInclude != null) {
     consumer.pushIncludeBase(LoadPathUtil.getChildBaseDir(base = consumer.includeBase, relativePath = path))
     try {
       consumer.consume(loadedXInclude.inputStream, loadedXInclude.diagnosticReferenceLocation)
-    } finally {
+    }
+    finally {
       consumer.popIncludeBase()
     }
     return
@@ -838,7 +841,7 @@ private fun readInclude(
     return
   }
   else {
-    throw RuntimeException("Cannot resolve $path (loader=${consumer.xIncludeLoader})", readError)
+    throw RuntimeException("Cannot resolve $path (targetPath=$targetPath, loader=${consumer.xIncludeLoader})", readError)
   }
 }
 

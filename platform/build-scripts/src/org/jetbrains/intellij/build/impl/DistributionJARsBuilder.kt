@@ -35,17 +35,14 @@ import org.jetbrains.intellij.build.PLATFORM_LOADER_JAR
 import org.jetbrains.intellij.build.PluginBuildDescriptor
 import org.jetbrains.intellij.build.PluginBundlingRestrictions
 import org.jetbrains.intellij.build.PluginDistribution
-import org.jetbrains.intellij.build.ProductModulesLayout
 import org.jetbrains.intellij.build.SearchableOptionSetDescriptor
 import org.jetbrains.intellij.build.antToRegex
 import org.jetbrains.intellij.build.buildSearchableOptions
-import org.jetbrains.intellij.build.createPluginLayoutSet
 import org.jetbrains.intellij.build.executeStep
 import org.jetbrains.intellij.build.fus.createStatisticsRecorderBundledMetadataProviderTask
 import org.jetbrains.intellij.build.generateClassPathByLayoutReport
 import org.jetbrains.intellij.build.generatePluginClassPath
 import org.jetbrains.intellij.build.generatePluginClassPathFromPrebuiltPluginFiles
-import org.jetbrains.intellij.build.impl.plugins.buildNonBundledPlugins
 import org.jetbrains.intellij.build.impl.plugins.doBuildNonBundledPlugins
 import org.jetbrains.intellij.build.impl.projectStructureMapping.ContentReport
 import org.jetbrains.intellij.build.impl.projectStructureMapping.DistributionFileEntry
@@ -61,6 +58,8 @@ import org.jetbrains.intellij.build.io.copyFile
 import org.jetbrains.intellij.build.io.copyFileToDir
 import org.jetbrains.intellij.build.io.writeNewZipWithoutIndex
 import org.jetbrains.intellij.build.io.zip
+import org.jetbrains.intellij.build.productLayout.ProductModulesLayout
+import org.jetbrains.intellij.build.productLayout.createPluginLayoutSet
 import org.jetbrains.intellij.build.telemetry.TraceManager.spanBuilder
 import org.jetbrains.intellij.build.telemetry.block
 import org.jetbrains.intellij.build.telemetry.use
@@ -115,27 +114,13 @@ internal suspend fun buildDistribution(
     val moduleOutputPatcher = ModuleOutputPatcher()
     val buildPlatformJob: Deferred<List<DistributionFileEntry>> = async(traceContext + CoroutineName("build platform lib")) {
       spanBuilder("build platform lib").use {
-        val distributionFileEntries = buildLib(
+        buildPlatform(
           moduleOutputPatcher = moduleOutputPatcher,
-          platform = state.platform,
-          searchableOptionSetDescriptor = searchableOptionSet,
+          state = state,
+          searchableOptionSet = searchableOptionSet,
           context = context,
+          isUpdateFromSources = isUpdateFromSources,
         )
-        if (!isUpdateFromSources && context.productProperties.scrambleMainJar) {
-          scramble(state.platform, context)
-        }
-        context.bootClassPathJarNames = if (context.useModularLoader) {
-          listOf(PLATFORM_LOADER_JAR)
-        }
-        else {
-          val libDir = context.paths.distAllDir.resolve("lib")
-          generateClassPathByLayoutReport(
-            libDir = libDir,
-            entries = distributionFileEntries,
-            skipNioFs = isMultiRoutingFileSystemEnabledForProduct(context.productProperties.platformPrefix)
-          ).map { libDir.relativize(it).toString() }
-        }
-        distributionFileEntries
       }
     }
 
@@ -189,6 +174,43 @@ internal suspend fun buildDistribution(
   contentReport
 }
 
+@VisibleForTesting
+suspend fun buildPlatform(
+  moduleOutputPatcher: ModuleOutputPatcher,
+  state: DistributionBuilderState,
+  searchableOptionSet: SearchableOptionSetDescriptor?,
+  context: BuildContext,
+  isUpdateFromSources: Boolean,
+): List<DistributionFileEntry> {
+  val distributionFileEntries = buildLib(
+    moduleOutputPatcher = moduleOutputPatcher,
+    platform = state.platform,
+    searchableOptionSetDescriptor = searchableOptionSet,
+    context = context,
+  )
+  if (!isUpdateFromSources && context.productProperties.scrambleMainJar) {
+    val tool = context.proprietaryBuildTools.scrambleTool
+    if (tool == null) {
+      Span.current().addEvent("skip scrambling because `scrambleTool` isn't defined")
+    }
+    else {
+      tool.scramble(platform = state.platform, platformFileEntries = distributionFileEntries, context = context)
+    }
+  }
+  context.bootClassPathJarNames = if (context.useModularLoader) {
+    listOf(PLATFORM_LOADER_JAR)
+  }
+  else {
+    val libDir = context.paths.distAllDir.resolve("lib")
+    generateClassPathByLayoutReport(
+      libDir = libDir,
+      entries = distributionFileEntries,
+      skipNioFs = isMultiRoutingFileSystemEnabledForProduct(context.productProperties.platformPrefix)
+    ).map { libDir.relativize(it).toString() }
+  }
+  return distributionFileEntries
+}
+
 private suspend fun buildBundledPluginsForAllPlatforms(
   state: DistributionBuilderState,
   pluginLayouts: Set<PluginLayout>,
@@ -237,6 +259,7 @@ private suspend fun buildBundledPluginsForAllPlatforms(
     common = common,
     specific = specific,
     additional = additionalDeferred.await(),
+    platformLayout = state.platform,
     context = context,
   )
   common + specific.values.flatten()
@@ -248,6 +271,7 @@ private fun writePluginInfo(
   common: List<Pair<PluginBuildDescriptor, List<DistributionFileEntry>>>,
   specific: Map<SupportedDistribution, List<Pair<PluginBuildDescriptor, List<DistributionFileEntry>>>>,
   additional: List<Pair<Path, List<Path>>>?,
+  platformLayout: PlatformLayout,
   context: BuildContext,
 ) {
   val commonClassPath = generatePluginClassPath(pluginEntries = common, moduleOutputPatcher = moduleOutputPatcher)
@@ -260,7 +284,7 @@ private fun writePluginInfo(
     val byteOut = ByteArrayOutputStream()
     val out = DataOutputStream(byteOut)
     val pluginCount = common.size + (additional?.size ?: 0) + (specificList?.size ?: 0)
-    writePluginClassPathHeader(out = out, isJarOnly = true, pluginCount = pluginCount, moduleOutputPatcher = moduleOutputPatcher, context = context)
+    writePluginClassPathHeader(out = out, isJarOnly = true, pluginCount = pluginCount, platformLayout = platformLayout, context = context)
     out.write(commonClassPath)
     additionalClassPath?.let { out.write(it) }
     specificClasspath?.let { out.write(it) }
@@ -733,16 +757,6 @@ private suspend fun containsFileInOutput(moduleName: String, filePath: String, e
   }
 
   return true
-}
-
-private suspend fun scramble(platform: PlatformLayout, context: BuildContext) {
-  val tool = context.proprietaryBuildTools.scrambleTool
-  if (tool == null) {
-    Span.current().addEvent("skip scrambling because `scrambleTool` isn't defined")
-  }
-  else {
-    tool.scramble(platform, context)
-  }
 }
 
 private fun CoroutineScope.createBuildBrokenPluginListJob(context: BuildContext): Job {
